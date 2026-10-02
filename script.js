@@ -79,6 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch("./target/combined_targets_v2.mind", { cache: "force-cache" }).catch(() => {});
   } catch (e) {}
 
+  const MODEL_ASSET_BASE_URL = "https://media.githubusercontent.com/media/OxzaLic/AR_Monster_Hunter_V.1/master/model";
   const MONSTER_DATABASE = {
     forest_mushroom: {
       id: "forest_mushroom",
@@ -96,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
       evasion: 5,
       expReward: 60,
       mindFile: "./target/forest_mushroom.mind",
-      glbFile: "./model/forest_mushroom.glb",
+      glbFile: `${MODEL_ASSET_BASE_URL}/forest_mushroom.glb`,
       scale: { x: 1.5, y: 1.5 , z: 1.5 },
       icon: "🍄"
     },
@@ -116,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
       evasion: 16,
       expReward: 500,
       mindFile: "./target/mega_wyvern.mind",
-      glbFile: "./model/mega_wyvern.glb",
+      glbFile: `${MODEL_ASSET_BASE_URL}/mega_wyvern.glb`,
       scale: { x: 0.8, y: 0.8, z: 0.8 },
       icon: "🐉"
     },
@@ -136,7 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
       evasion: 5,
       expReward: 35,
       mindFile: "./target/mimic.mind",
-      glbFile: "./model/mimic.glb",
+      glbFile: `${MODEL_ASSET_BASE_URL}/mimic.glb`,
       scale: { x: 1.05, y: 1.05, z: 1.05 },
       icon: "🧰"
     },
@@ -156,7 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
       evasion: 7,
       expReward: 100,
       mindFile: "./target/quarry_horn.mind",
-      glbFile: "./model/quarry_horn.glb",
+      glbFile: `${MODEL_ASSET_BASE_URL}/quarry_horn.glb`,
       scale: { x: 20, y: 20, z: 20 },
       icon: "🦏"
     }
@@ -811,6 +812,35 @@ document.addEventListener("DOMContentLoaded", () => {
     scanMessage.classList.remove("hidden");
   }
 
+  function restoreScannerAfterError(message, placeholderText) {
+    stopScanner();
+    if (battleArena) battleArena.classList.remove("scanning");
+    if (scanPlaceholder) {
+      scanPlaceholder.textContent = placeholderText;
+      scanPlaceholder.classList.remove("hidden");
+    }
+    if (scanBtn && !isBattleActive && !isVictory) {
+      scanBtn.classList.remove("hidden");
+    }
+    updateBattleUi();
+    setScanMessage(message, true);
+  }
+
+  function getScannerErrorMessage(error) {
+    switch (error?.name) {
+      case "NotAllowedError":
+        return "Edge ไม่อนุญาตให้ใช้กล้อง กรุณาอนุญาต Camera สำหรับเว็บไซต์นี้ แล้วลองอีกครั้ง";
+      case "NotFoundError":
+        return "ไม่พบกล้อง กรุณาเชื่อมต่อหรือเปิดใช้งานกล้อง แล้วลองอีกครั้ง";
+      case "NotReadableError":
+        return "กล้องกำลังถูกใช้งานโดยแอปอื่น กรุณาปิดแอปนั้นแล้วลองอีกครั้ง";
+      case "OverconstrainedError":
+        return "ไม่พบกล้องที่รองรับ กรุณาตรวจสอบการเชื่อมต่อกล้องแล้วลองอีกครั้ง";
+      default:
+        return "เริ่ม AR ไม่สำเร็จ กรุณาอนุญาตกล้องใน Edge และเปิดผ่าน HTTPS หรือ localhost แล้วลองอีกครั้ง";
+    }
+  }
+
   function showMonsterDetected() {
     if (!isScannerOpen || !isTargetVisible || !monsterModelReadyMap.get(activeMonsterKey)) return;
     isTargetScanned = true;
@@ -852,14 +882,18 @@ document.addEventListener("DOMContentLoaded", () => {
     setScanMessage("เล็งกล้องไปที่การ์ดมอนสเตอร์");
 
     if (!window.AFRAME || !mindarScene) {
-      setScanMessage("โหลด MindAR ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่", true);
-      if (scanPlaceholder) scanPlaceholder.textContent = "โหลดระบบ AR ไม่สำเร็จ";
+      restoreScannerAfterError(
+        "โหลด MindAR ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่",
+        "โหลดระบบ AR ไม่สำเร็จ"
+      );
       return;
     }
 
     if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
-      setScanMessage("เปิดกล้องไม่ได้ กรุณาใช้หน้าเว็บผ่าน HTTPS หรือ localhost", true);
-      if (scanPlaceholder) scanPlaceholder.textContent = "ไม่สามารถเข้าถึงกล้อง";
+      restoreScannerAfterError(
+        "เปิดกล้องไม่ได้ กรุณาใช้หน้าเว็บผ่าน HTTPS หรือ localhost และอนุญาตกล้องใน Edge",
+        "ไม่สามารถเข้าถึงกล้อง"
+      );
       return;
     }
 
@@ -880,11 +914,9 @@ document.addEventListener("DOMContentLoaded", () => {
       setScanMessage("เล็งกล้องไปที่การ์ดมอนสเตอร์");
     } catch (error) {
       const scannerWasOpen = isScannerOpen;
-      stopScanner();
       if (!scannerWasOpen) return;
-      setScanMessage("เริ่ม AR ไม่สำเร็จ กรุณาอนุญาตกล้องและเปิดผ่าน HTTPS หรือ localhost", true);
-      if (scanPlaceholder) scanPlaceholder.textContent = "ไม่สามารถเริ่มกล้อง AR";
-      console.warn("MindAR scanner failed to start:", error);
+      restoreScannerAfterError(getScannerErrorMessage(error), "ไม่สามารถเริ่มกล้อง AR");
+      console.error("MindAR scanner failed to start:", error);
     }
   }
 
@@ -898,16 +930,12 @@ document.addEventListener("DOMContentLoaded", () => {
     mindarScene.addEventListener("arError", (event) => {
       if (!isScannerOpen) return;
       const cameraFailed = event.detail?.error === "VIDEO_FAIL";
-      setScanMessage(
+      restoreScannerAfterError(
         cameraFailed
-          ? "เปิดกล้องไม่ได้ กรุณาอนุญาตสิทธิ์กล้องให้เว็บไซต์"
-          : "เริ่ม AR ไม่สำเร็จ กรุณาตรวจสอบกล้องและไฟล์การ์ด target",
-        true
+          ? "เปิดกล้องไม่ได้ กรุณาอนุญาต Camera สำหรับเว็บไซต์นี้ใน Edge แล้วลองอีกครั้ง"
+          : "เริ่ม AR ไม่สำเร็จ กรุณาตรวจสอบกล้องและไฟล์การ์ด target แล้วลองอีกครั้ง",
+        cameraFailed ? "ไม่สามารถเข้าถึงกล้อง" : "เริ่ม AR ไม่สำเร็จ"
       );
-      if (scanPlaceholder) {
-        scanPlaceholder.textContent = cameraFailed ? "ไม่สามารถเข้าถึงกล้อง" : "เริ่ม AR ไม่สำเร็จ";
-        scanPlaceholder.classList.remove("hidden");
-      }
     });
   }
 
